@@ -271,15 +271,38 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         cursor = event["seq"]
                     if len(history) < 500:
                         break
-                while True:
-                    try:
-                        event = await asyncio.wait_for(queue.get(), 15)
-                        if event["seq"] > cursor:
-                            for missing in runtime.store.events(cursor, limit=500):
-                                await socket.send_json(missing)
-                                cursor = missing["seq"]
-                    except TimeoutError:
-                        await socket.send_json({"kind": "HEARTBEAT", "data": {}})
+
+                async def stream_events():
+                    nonlocal cursor
+                    while True:
+                        try:
+                            event = await asyncio.wait_for(queue.get(), 15)
+                            if event["seq"] > cursor:
+                                for missing in runtime.store.events(cursor, limit=500):
+                                    await socket.send_json(missing)
+                                    cursor = missing["seq"]
+                        except TimeoutError:
+                            await socket.send_json({"kind": "HEARTBEAT", "data": {}})
+
+                async def wait_for_disconnect():
+                    # Receive close frames even when the event stream is idle.
+                    # Otherwise server shutdown waits for the next heartbeat.
+                    while True:
+                        if (await socket.receive())["type"] == "websocket.disconnect":
+                            return
+
+                tasks = {
+                    asyncio.create_task(stream_events()),
+                    asyncio.create_task(wait_for_disconnect()),
+                }
+                try:
+                    done, _ = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+                    for task in done:
+                        task.result()
+                finally:
+                    for task in tasks:
+                        task.cancel()
+                    await asyncio.gather(*tasks, return_exceptions=True)
         except (WebSocketDisconnect, TimeoutError, ValueError, RuntimeError):
             return
 

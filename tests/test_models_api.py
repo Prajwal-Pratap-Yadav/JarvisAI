@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -19,8 +20,9 @@ def test_unsafe_provider_urls(url):
 
 
 def test_settings_persistence(tmp_path, monkeypatch):
-    for key in ["JARVIS_PROVIDER", "JARVIS_MODEL", "JARVIS_WORKSPACE"]:
+    for key in ["JARVIS_PROVIDER", "JARVIS_MODEL"]:
         monkeypatch.delenv(key, raising=False)
+    monkeypatch.setenv("JARVIS_WORKSPACE", str(tmp_path / "work"))
     settings = Settings.load(tmp_path)
     settings.model = "custom-model"
     settings.save()
@@ -123,3 +125,40 @@ def test_request_limit_and_websocket_auth(tmp_path):
         ) as socket:
             socket.send_json({"token": settings.token(), "after": 0})
             assert socket.receive_json()["kind"] == "RUNTIME_STATE"
+
+
+async def test_idle_websocket_disconnect_releases_subscription(tmp_path):
+    settings = Settings(data_dir=tmp_path / "data", workspace=tmp_path / "work")
+    app = create_app(settings)
+    runtime = app.state.runtime
+    incoming, outgoing = asyncio.Queue(), asyncio.Queue()
+    scope = {
+        "type": "websocket",
+        "asgi": {"version": "3.0", "spec_version": "2.4"},
+        "scheme": "ws",
+        "path": "/api/live",
+        "raw_path": b"/api/live",
+        "root_path": "",
+        "query_string": b"",
+        "headers": [(b"host", b"127.0.0.1:8765"), (b"origin", b"http://127.0.0.1:8765")],
+        "client": ("127.0.0.1", 12345),
+        "server": ("127.0.0.1", 8765),
+        "subprotocols": [],
+    }
+    await runtime.start()
+    connection = asyncio.create_task(app(scope, incoming.get, outgoing.put))
+    try:
+        await incoming.put({"type": "websocket.connect"})
+        assert (await asyncio.wait_for(outgoing.get(), 1))["type"] == "websocket.accept"
+        await incoming.put(
+            {"type": "websocket.receive", "text": json.dumps({"token": settings.token()})}
+        )
+        assert (await asyncio.wait_for(outgoing.get(), 1))["type"] == "websocket.send"
+        assert len(runtime.bus.subscribers) == 1
+        await incoming.put({"type": "websocket.disconnect", "code": 1000})
+        await asyncio.wait_for(connection, 1)
+        assert not runtime.bus.subscribers
+    finally:
+        connection.cancel()
+        await asyncio.gather(connection, return_exceptions=True)
+        await runtime.close()

@@ -69,12 +69,18 @@ async def main():
                 await page.screenshot(path="test-results/hud-mobile.png", full_page=True)
                 assert not errors, errors
                 await browser.close()
-                print(
-                    "PASS: real Chromium launch, setup, task execution, memory, XSS rendering, responsive layout"
-                )
         finally:
-            process.terminate()
-            await asyncio.wait_for(process.wait(), 10)
+            if process.returncode is None:
+                process.terminate()
+                try:
+                    await asyncio.wait_for(process.wait(), 10)
+                except TimeoutError:
+                    process.kill()
+                    await process.wait()
+                    raise
+        print(
+            "PASS: real Chromium launch, setup, task execution, memory, XSS rendering, responsive layout, shutdown"
+        )
 
 
 if __name__ == "__main__":

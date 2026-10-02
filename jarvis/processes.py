@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -39,7 +40,7 @@ async def run_process(argv: list[str], cwd: Path, timeout: float = 30) -> dict: 
         await asyncio.wait_for(reader, 2)
     finally:
         # Also terminate grandchildren that outlive their original test process.
-        if os.name == "nt":
+        if sys.platform == "win32":
             if process.returncode is None:
                 import psutil
 
