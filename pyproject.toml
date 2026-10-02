@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=77", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jarvis-ai-runtime"
+version = "0.1.0"
+description = "Local-first personal AI runtime with governed tools and inspectable execution"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{name = "Prajwal Pratap Yadav", email = "prajwalpratapyadav5@gmail.com"}]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.9,<3", "httpx>=0.27,<1", "psutil>=6,<8", "websockets>=14,<17"]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.48,<2"]
+desktop = ["pyautogui>=0.9.54", "Pillow>=11", "pytesseract>=0.3.13", "pyperclip>=1.9"]
+dev = ["pytest>=8", "pytest-asyncio>=0.24", "pytest-cov>=5", "ruff>=0.9", "mypy==1.18.2", "types-psutil", "httpx2", "build>=1.2", "pip-audit>=2.7"]
+
+[project.scripts]
+jarvis = "jarvis.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["jarvis*"]
+
+[tool.setuptools.package-data]
+jarvis = ["frontend/*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "ASYNC"]
+ignore = ["E501"]
+
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+ignore_missing_imports = true
