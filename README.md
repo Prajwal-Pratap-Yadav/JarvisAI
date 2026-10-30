@@ -8,6 +8,8 @@ JARVIS turns a goal into a bounded task graph, executes available capabilities, 
 
 **v0.1.0 is an engineering preview.** It is a practical agentic assistant framework with AGI-oriented research goals, not demonstrated AGI and not an autonomous replacement for human judgment. [Implementation status](docs/status.md) distinguishes working code, optional adapters, verification limits, and future research.
 
+**Review the project:** [code, tests, and evidence](docs/REVIEW_GUIDE.md).
+
 ## Start here
 
 **Windows users:** download `Jarvis-0.1.0-Windows-x64.zip` when available under Releases, extract the entire archive, and open `JarvisAI.exe`. The console prints a private local launch link and opens the HUD. Keep the console open while using Jarvis; Ctrl+C stops it. A missing artifact means that target has not passed its release build—do not substitute another OS's binary.
@@ -104,3 +106,4 @@ GitHub Actions checks Windows/Linux on Python 3.11/3.12, runs a real Chromium UI
 **Next research directions:** semantic embedding retrieval, local streaming speech engines, richer visual grounding, sandboxed coding workers, stronger outcome evaluation, plan repair without repeating effects, signed installers, and independently measured cross-domain benchmarks. These are not claimed as completed capabilities.
 
 MIT © Prajwal Pratap Yadav. [Third-party notices](THIRD_PARTY.md).
+
