@@ -52,6 +52,58 @@ def test_redaction():
 
 
 @pytest.mark.parametrize(
+    "name",
+    [
+        ".GIT/config",
+        "nested/.Aws/credentials",
+        ".ENV",
+        ".ENV.LOCAL",
+        "ACCESS.TOKEN",
+        ".git./config",
+        ".env ",
+        "access.token. ",
+    ],
+)
+def test_protected_paths_include_case_and_windows_aliases(tmp_path, name):
+    with pytest.raises(Denied):
+        PathPolicy(tmp_path).resolve(name)
+
+
+def test_granted_approval_keeps_original_deadline(monkeypatch):
+    now = 1000.0
+    monkeypatch.setattr(time, "time", lambda: now)
+    gate = ApprovalGate()
+    approval = gate.request("r", "n", "write", {"content": "one"})
+    now = 1599.0
+    gate.decide(approval.id, True)
+    now = 1600.0
+    assert not gate.consume("r", "n", "write", {"content": "one"})
+    assert not gate.grants
+
+
+def test_live_grant_is_exact_and_single_use(monkeypatch):
+    monkeypatch.setattr(time, "time", lambda: 1000.0)
+    gate = ApprovalGate()
+    approval = gate.request("r", "n", "write", {"content": "one"})
+    gate.decide(approval.id, True)
+    assert not gate.consume("other", "n", "write", {"content": "one"})
+    assert not gate.consume("r", "other", "write", {"content": "one"})
+    assert gate.consume("r", "n", "write", {"content": "one"})
+    assert not gate.consume("r", "n", "write", {"content": "one"})
+
+
+def test_approval_arguments_are_an_independent_snapshot():
+    gate = ApprovalGate()
+    arguments = {"steps": [{"content": "reviewed"}]}
+    approval = gate.request("r", "n", "write", arguments)
+    arguments["steps"][0]["content"] = "changed"
+    public = approval.public()
+    assert public["arguments"] == {"steps": [{"content": "reviewed"}]}
+    public["arguments"]["steps"][0]["content"] = "also changed"
+    assert approval.public()["arguments"] == {"steps": [{"content": "reviewed"}]}
+
+
+@pytest.mark.parametrize(
     "url",
     [
         "http://example.com",
