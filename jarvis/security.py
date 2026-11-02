@@ -7,6 +7,7 @@ import json
 import re
 import secrets
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -60,14 +61,17 @@ class PathPolicy:
             if current.is_symlink():
                 raise Denied("Symlink paths are not permitted")
             # Block git internals and credential files for both read and write tools.
-            if part in {
+            # Windows ignores case and trailing dots/spaces in ordinary paths.
+            # Apply the same protected-name policy on every supported platform.
+            protected_name = part.rstrip(" .").casefold()
+            if protected_name in {
                 ".git",
                 ".ssh",
                 ".aws",
                 ".azure",
                 ".env",
                 "access.token",
-            } or part.startswith(".env."):
+            } or protected_name.startswith(".env."):
                 raise Denied("Credential and repository metadata paths are protected")
         resolved = current.resolve()
         if not resolved.is_relative_to(self.root):
@@ -103,7 +107,7 @@ class ApprovalGate:
 
     def __init__(self) -> None:
         self.pending: dict[str, Approval] = {}
-        self.grants: dict[tuple[str, str], str] = {}
+        self.grants: dict[tuple[str, str], Approval] = {}
 
     @staticmethod
     def digest(tool: str, arguments: dict[str, Any]) -> str:
@@ -116,7 +120,13 @@ class ApprovalGate:
             if (approval.run_id, approval.node_id, approval.digest) == (run_id, node_id, digest):
                 return approval
         approval = Approval(
-            secrets.token_hex(12), run_id, node_id, tool, digest, arguments, time.time() + 600
+            secrets.token_hex(12),
+            run_id,
+            node_id,
+            tool,
+            digest,
+            deepcopy(arguments),
+            time.time() + 600,
         )
         self.pending[approval.id] = approval
         return approval
@@ -127,16 +137,19 @@ class ApprovalGate:
         if not approval:
             raise Denied("Approval is missing, consumed, or expired")
         if allowed:
-            self.grants[(approval.run_id, approval.node_id)] = approval.digest
+            self.grants[(approval.run_id, approval.node_id)] = approval
         return approval
 
     def consume(self, run_id: str, node_id: str, tool: str, arguments: dict[str, Any]) -> bool:
+        self.prune()
         granted = self.grants.pop((run_id, node_id), None)
-        return granted == self.digest(tool, arguments)
+        return granted is not None and granted.digest == self.digest(tool, arguments)
 
     def clear_run(self, run_id: str) -> None:
         self.pending = {k: a for k, a in self.pending.items() if a.run_id != run_id}
-        self.grants = {k: d for k, d in self.grants.items() if k[0] != run_id}
+        self.grants = {k: a for k, a in self.grants.items() if k[0] != run_id}
 
     def prune(self) -> None:
-        self.pending = {k: a for k, a in self.pending.items() if a.expires > time.time()}
+        now = time.time()
+        self.pending = {k: a for k, a in self.pending.items() if a.expires > now}
+        self.grants = {k: a for k, a in self.grants.items() if a.expires > now}
