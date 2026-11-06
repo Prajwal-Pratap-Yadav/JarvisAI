@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 authors = [{name = "Prajwal Pratap Yadav", email = "prajwalpratapyadav5@gmail.com"}]
-dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.9,<3", "httpx>=0.27,<1", "psutil>=6,<8", "websockets>=14,<17"]
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.30,<1", "pydantic>=2.9,<3", "httpx>=0.27,<1", "psutil>=6,<8", "websockets>=14,<18"]
 
 [project.optional-dependencies]
 browser = ["playwright>=1.48,<2"]
